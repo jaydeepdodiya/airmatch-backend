@@ -39,11 +39,34 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000/api/health](http://localhost:3000/api/health) — you should see:
+## Git workflow
 
-```json
-{ "status": "ok", "service": "airmatch-api", "timestamp": "..." }
+| Branch | Purpose |
+|--------|---------|
+| `main` | Stable, production-ready API |
+| `development` | Active feature work — **branch from here** |
+
+```bash
+git checkout development
+git pull origin development
+# make changes...
+git add .
+git commit -m "feat: your change"
+git push origin development
+# Open PR: development → main when ready
 ```
+
+**Repo:** [github.com/jaydeepdodiya/airmatch-backend](https://github.com/jaydeepdodiya/airmatch-backend)
+
+## Phase 0 features
+
+- `GET /api/health` — health check
+- `GET /api/trips` — list active trips
+- `POST /api/trips` — create trip intent
+- `GET /api/trips/:id` — get one trip
+- `GET /api/trips/:id/matches` — matching engine (score ≥ 0.65)
+
+**PRD:** [docs/PRD.md](docs/PRD.md)
 
 ## Scripts
 

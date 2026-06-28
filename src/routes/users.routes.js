@@ -7,5 +7,6 @@ const router = express.Router();
 router.use(requireAuth);
 router.get('/me', usersController.getMe);
 router.put('/me', usersController.updateMe);
+router.post('/fcm-token', usersController.saveFcmToken);
 
 module.exports = router;

@@ -2,13 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [main, development]
+    branches: [development, main]
   pull_request:
-    branches: [main, development]
+    branches: [development, main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/airmatch-test
+      SKIP_AUTH: 'true'
+      NODE_ENV: test
 
     steps:
       - uses: actions/checkout@v4
@@ -16,12 +27,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
+      - run: npm run check
 
-      - name: Verify app loads
-        run: node -e "require('./src/app'); console.log('OK')"
-        env:
-          SKIP_AUTH: 'true'
+      - name: Start API and health check
+        run: |
+          npm start &
+          for i in {1..20}; do
+            curl -sf http://localhost:3000/api/health && exit 0
+            sleep 1
+          done
+          exit 1

@@ -6,6 +6,14 @@ Lightweight **Node.js + Express** API for [AirMatch](https://github.com/jaydeepd
 
 - **Flutter app:** [github.com/jaydeepdodiya/airmatch-flutter](https://github.com/jaydeepdodiya/airmatch-flutter)
 
+## Learn backend (for Flutter developers)
+
+**New to Node.js?** Start here:
+
+📖 **[docs/BACKEND_LEARNING.md](docs/BACKEND_LEARNING.md)** — explains every file using Flutter analogies (BLoC = Controller, UseCase = Service, etc.)
+
+📋 **[../docs/ROADMAP.md](../docs/ROADMAP.md)** — step-by-step build plan for Flutter + backend together
+
 ## Folder structure
 
 ```
@@ -73,11 +81,39 @@ git push origin development
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start with auto-reload on file changes |
-| `npm start` | Start in production mode |
+| `npm run check` | Syntax-check entrypoint without starting server |
+
+## Production deploy (Render)
+
+1. Create a **MongoDB Atlas** cluster → copy connection string
+2. Firebase Console → Service accounts → **Generate new private key**
+3. [Render](https://render.com) → New **Web Service** → connect `airmatch-backend` repo
+4. Use `render.yaml` or set env vars from `.env.production.example`:
+   - `NODE_ENV=production`
+   - `SKIP_AUTH=false`
+   - `MONGODB_URI=...`
+   - `FIREBASE_SERVICE_ACCOUNT_JSON=...` (paste full JSON)
+5. Deploy → verify `GET https://YOUR-SERVICE.onrender.com/api/health`
+
+```bash
+curl https://YOUR-SERVICE.onrender.com/api/health
+# → {"status":"ok","service":"airmatch-api","environment":"production",...}
+```
+
+## Release PR (development → main)
+
+```bash
+git checkout development && git pull
+# smoke test locally, then:
+gh pr create --base main --head development --title "Release: v1.0.0"
+```
+
+CI runs on every push/PR (`.github/workflows/ci.yml`).
 
 ## What we add next
 
-1. **Users** — profile linked to Firebase Auth
-2. **Trips** — airport, arrival time, destination
-3. **Matches** — find travelers with similar routes
-4. **Database** — MongoDB or PostgreSQL (we'll pick one together)
+Portfolio project is feature-complete through Step 10. Optional polish:
+
+1. Apple Sign-In (App Store requirement for some apps)
+2. Integration tests with real Firebase test users
+3. App Store / Play Store screenshots and listing copy

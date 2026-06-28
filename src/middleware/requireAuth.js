@@ -9,9 +9,11 @@ async function requireAuth(req, res, next) {
       email: 'demo@airmatch.dev',
       name: 'Demo Traveler',
     };
-    upsertUser('demo-user', {
+    await upsertUser('demo-user', {
       displayName: 'Demo Traveler',
       email: 'demo@airmatch.dev',
+      onboardingCompleted: true,
+      languages: ['English'],
     });
     return next();
   }
@@ -32,7 +34,7 @@ async function requireAuth(req, res, next) {
     const token = header.slice('Bearer '.length);
     const decoded = await auth.verifyIdToken(token);
     req.user = decoded;
-    upsertUser(decoded.uid, {
+    await upsertUser(decoded.uid, {
       displayName: decoded.name,
       email: decoded.email,
       photoUrl: decoded.picture,

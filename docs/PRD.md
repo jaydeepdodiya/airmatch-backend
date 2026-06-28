@@ -3,10 +3,11 @@
 | Field | Value |
 |-------|-------|
 | **Product** | AirMatch |
-| **Version** | 1.2 (Phase 1 — Auth) |
+| **Version** | 1.3 (Flutter Engineering Standards) |
 | **Status** | In Development |
 | **Last Updated** | June 18, 2026 |
-| **Owner** | Product / Engineering |
+| **Owner** | Product / Engineering | 
+
 
 ---
 
@@ -179,6 +180,7 @@ App Launch
 |----|------------|----------|---------------------|
 | SET-01 | As a user, I want to manage notification preferences | P1 | Toggle per event type |
 | SET-02 | As a user, I want to delete my account and data | P0 | GDPR-style deletion within 30 days |
+| SET-03 | As a user, I want to switch between light and dark mode | P1 | Theme persists across app restarts; follows system default on first launch |
 
 ---
 
@@ -445,24 +447,33 @@ Each repo is developed and deployed independently. The Flutter app calls the bac
 
 ### 19.2 Folder Structure
 
+See **§21** for full engineering standards. Target layout:
+
 ```
 lib/
 ├── main.dart
 ├── app.dart
-├── core/
-│   ├── constants/
-│   ├── di/injection.dart
-│   ├── network/dio_client.dart
-│   ├── theme/app_theme.dart
-│   └── error/failures.dart
-├── config/api_config.dart
-└── features/
-    ├── splash/
+├── firebase_options.dart
+├── config/
+│   └── api_config.dart
+├── core/                          → shared, reusable (§21.3)
+│   ├── constants/                 → strings, assets, dimensions
+│   ├── theme/                     → light/dark themes, ThemeCubit
+│   ├── utils/                     → date_formatter, validators
+│   ├── widgets/                   → AppButton, AppTextField, etc.
+│   ├── services/                  → location, connectivity
+│   ├── network/                   → dio_client
+│   ├── di/                        → get_it injection
+│   └── error/                     → failures
+└── features/                      → Clean Architecture per feature (§21.2)
+    ├── auth/
     ├── home/
-    └── trips/
-        ├── data/        → API models, remote datasource, repo impl
-        ├── domain/      → entities, repository contracts, use cases
-        └── presentation/ → BLoC, pages, widgets
+    ├── trips/
+    ├── map/                       → planned
+    └── settings/                  → planned (theme toggle)
+        ├── data/
+        ├── domain/
+        └── presentation/
 ```
 
 ### 19.3 Phase 0 — Completed
@@ -502,11 +513,15 @@ lib/
 
 | Item | Priority |
 |------|----------|
+| Core reusable widgets + DateFormatter (§21.3) | P0 |
+| Dark theme + ThemeCubit (§21.4) | P0 |
+| Google Maps + destination picker (§21.6) | P0 |
 | Profile onboarding screen | P0 |
 | Hive offline cache for trips | P1 |
 | FCM push notifications | P0 |
 | Deep linking (`airmatch://match/{id}`) | P0 |
 | Apple Sign-In (iOS) | P1 |
+| go_router navigation | P1 |
 
 ### 19.7 Local API URL
 
@@ -619,3 +634,311 @@ Only matches with `score >= 0.65` are returned (per §6.1).
 2. Save as `backend/serviceAccountKey.json` (gitignored)
 3. Set in `backend/.env`: `GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKey.json`
 4. Or set `SKIP_AUTH=true` for local dev without Firebase
+
+---
+
+## 21. Flutter Engineering Standards
+
+Enterprise-grade Flutter conventions for AirMatch. All new code must follow these rules.
+
+### 21.1 State Management — BLoC
+
+| Rule | Requirement |
+|------|-------------|
+| **Library** | `flutter_bloc` + `equatable` for states/events |
+| **Scope** | One BLoC per feature screen or flow (e.g. `AuthBloc`, `TripBloc`) |
+| **UI rule** | Widgets are dumb — no business logic in `build()` |
+| **Events** | User actions → `Event`; side effects in BLoC handlers only |
+| **States** | Immutable; use `copyWith`; expose loading / success / error |
+| **DI** | BLoCs registered in GetIt as `registerFactory` (fresh per screen) |
+| **Testing** | `bloc_test` + `mocktail` for every BLoC |
+
+**Flow:**
+```
+UI → dispatches Event → BLoC → UseCase → Repository → API
+UI ← emits State   ← BLoC ← result
+```
+
+| BLoC | Feature | Status |
+|------|---------|--------|
+| `AuthBloc` | Login, Google Sign-In, sign out | ✅ Implemented |
+| `HomeBloc` | API health status | ✅ Implemented |
+| `TripBloc` | Create trip, list, matches | ✅ Implemented |
+| `ThemeBloc` | Light / dark / system theme | ⬜ Planned |
+| `MapBloc` | Pick destination on map | ⬜ Planned |
+| `MatchBloc` | Match requests accept/decline | ⬜ Planned |
+| `ChatBloc` | In-app messaging | ⬜ Planned |
+
+---
+
+### 21.2 Clean Architecture
+
+Strict **3-layer** separation per feature:
+
+```
+features/<feature>/
+├── presentation/     → BLoC, Pages, Widgets (Flutter UI only)
+├── domain/           → Entities, Repository contracts, UseCases (pure Dart)
+└── data/             → Models, DataSources, RepositoryImpl (API + cache)
+```
+
+| Layer | Allowed imports | Forbidden |
+|-------|-----------------|-----------|
+| **presentation** | domain, core | data (direct API calls) |
+| **domain** | nothing Flutter-specific | presentation, data |
+| **data** | domain, core | presentation |
+
+**UseCase rule:** One action per class (`GetTrips`, `CreateTrip`, `SignInWithGoogle`).
+
+| Principle | Status |
+|-------------|--------|
+| Feature-first folder structure | ✅ |
+| Repository pattern | ✅ |
+| Use cases for business actions | ✅ |
+| Domain entities separate from API models | ✅ |
+| Error mapping (Dio → user-friendly message) | ✅ Partial |
+
+---
+
+### 21.3 Shared Core Layer — Reusable Code
+
+All cross-feature code lives under `lib/core/`. **Never duplicate** strings, formatters, or widgets across features.
+
+#### 21.3.1 Folder Structure (target)
+
+```
+lib/core/
+├── constants/
+│   ├── app_strings.dart       → all user-visible text
+│   ├── app_assets.dart        → asset paths
+│   └── app_dimensions.dart    → spacing, radius, icon sizes
+├── theme/
+│   ├── app_theme.dart         → light + dark ThemeData
+│   ├── app_colors.dart        → color tokens (primary, surface, error)
+│   └── theme_cubit.dart       → theme mode state (light/dark/system)
+├── utils/
+│   ├── date_formatter.dart    → arrival time, relative time ("in 2h")
+│   ├── distance_formatter.dart → km / miles for match proximity
+│   └── validators.dart        → email, airport code, party size
+├── widgets/                   → reusable UI components
+│   ├── app_button.dart
+│   ├── app_text_field.dart
+│   ├── app_loading.dart
+│   ├── app_error_view.dart
+│   ├── app_empty_state.dart
+│   └── app_avatar.dart
+├── services/                  → app-wide services (not feature-specific)
+│   ├── connectivity_service.dart
+│   └── location_service.dart
+├── network/
+│   └── dio_client.dart
+├── di/
+│   └── injection.dart
+└── error/
+    └── failures.dart
+```
+
+#### 21.3.2 Strings
+
+| Rule | Example |
+|------|---------|
+| All UI text in `AppStrings` | `AppStrings.signInWithGoogle` |
+| No hardcoded strings in widgets | ❌ `Text('Sign in')` → ✅ `Text(AppStrings.signIn)` |
+| Error messages centralized | `AppStrings.errorNetwork` |
+| i18n-ready (future) | Wrap with `intl` / ARB files in Phase 2 |
+
+**Status:** `AppStrings` started ⬜ full coverage needed
+
+#### 21.3.3 Date & Time Formatting
+
+| Formatter | Use case | Package |
+|-----------|----------|---------|
+| `DateFormatter.arrival()` | Trip card: "Jun 20, 14:30" | `intl` |
+| `DateFormatter.relative()` | Match: "Arrives in 45 min" | `intl` |
+| `DateFormatter.chatTime()` | Chat bubble timestamp | `intl` |
+| UTC ↔ local | All API dates stored UTC, displayed local | built-in |
+
+**Status:** ⬜ `DateFormatter` utility class not yet created (using inline `intl` today)
+
+#### 21.3.4 Reusable Widgets
+
+| Widget | Purpose | Status |
+|--------|---------|--------|
+| `AppButton` | Primary / outlined / loading state | ⬜ |
+| `AppTextField` | Form fields with validation styling | ⬜ |
+| `AppLoading` | Full-screen and inline loaders | ⬜ |
+| `AppErrorView` | Error state with retry | ⬜ |
+| `AppEmptyState` | "No trips yet" placeholder | ⬜ |
+| `AppAvatar` | User photo + fallback initials | ⬜ |
+| `TripCard` | Trip summary card | ✅ |
+| `MatchScoreChip` | "% match" badge | ⬜ |
+
+---
+
+### 21.4 Theme — Light & Dark Mode
+
+Material 3 theme system with user-controlled mode.
+
+#### 21.4.1 Architecture
+
+```
+ThemeCubit (or ThemeBloc)
+  → reads/writes SharedPreferences key: "theme_mode"
+  → emits ThemeMode: light | dark | system
+
+MaterialApp(
+  theme: AppTheme.light,
+  darkTheme: AppTheme.dark,
+  themeMode: context.watch<ThemeCubit>().state,
+)
+```
+
+#### 21.4.2 Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| THEME-01 | Light theme with AirMatch brand colors (aviation blue) | P0 |
+| THEME-02 | Dark theme with matching contrast ratios (WCAG AA) | P0 |
+| THEME-03 | "System default" option follows OS setting | P1 |
+| THEME-04 | Theme choice persisted locally (`shared_preferences`) | P1 |
+| THEME-05 | Toggle in Settings screen | P1 |
+| THEME-06 | All screens use `Theme.of(context)` — no hardcoded colors | P0 |
+| THEME-07 | Color tokens in `AppColors` — single source of truth | P0 |
+
+#### 21.4.3 Color Tokens
+
+| Token | Light | Dark |
+|-------|-------|------|
+| `primary` | `#0D47A1` (aviation blue) | `#64B5F6` |
+| `surface` | `#FFFFFF` | `#121212` |
+| `onSurface` | `#1A1A1A` | `#E0E0E0` |
+| `error` | `#B00020` | `#CF6679` |
+| `matchScoreHigh` | `#2E7D32` | `#81C784` |
+| `matchScoreLow` | `#F57C00` | `#FFB74D` |
+
+**Status:** Light theme only ✅ — dark theme + ThemeCubit ⬜
+
+---
+
+### 21.5 Performance
+
+| ID | Requirement | Target | Status |
+|----|-------------|--------|--------|
+| PERF-01 | Cold start time | < 2.5s on mid-range device | ⬜ Not measured |
+| PERF-02 | Frame rate | 60 fps on list scroll | ⬜ |
+| PERF-03 | Image caching | `cached_network_image` for avatars | ⬜ |
+| PERF-04 | List optimization | `ListView.builder` — never unbounded lists | ✅ Partial |
+| PERF-05 | BLoC dispose | Close BLoCs in `BlocProvider` scope | ✅ |
+| PERF-06 | Const constructors | Use `const` widgets where possible | ⬜ Audit needed |
+| PERF-07 | API debounce | Search / refresh debounced 300ms | ⬜ |
+| PERF-08 | Lazy loading | Paginate trip/match lists (20 per page) | ⬜ Phase 2 |
+| PERF-09 | Build size | Tree-shake icons; split per ABI (Android) | ⬜ |
+| PERF-10 | Memory | No memory leaks on navigation pop | ⬜ |
+
+**Tools:** Flutter DevTools Performance tab, `flutter run --profile` for profiling.
+
+---
+
+### 21.6 Maps & Location
+
+Required for destination picker, airport context, and match proximity display.
+
+#### 21.6.1 Stack
+
+| Package | Purpose |
+|---------|---------|
+| `google_maps_flutter` | Map display, markers, camera |
+| `google_places_flutter` or Places API via Dio | Address / airport search autocomplete |
+| `geolocator` | Device GPS (with permission) |
+| `geocoding` | Lat/Lng ↔ address label |
+
+#### 21.6.2 Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| MAP-01 | Google Maps API key configured (Android + iOS) | P0 |
+| MAP-02 | Destination picker: search + pin on map | P0 |
+| MAP-03 | Airport marker on map when trip is active | P1 |
+| MAP-04 | Show destination zone circle (~500m) for match context | P1 |
+| MAP-05 | Location permission flow (explain why before asking) | P0 |
+| MAP-06 | Fallback to manual lat/lng if GPS denied | P0 |
+| MAP-07 | Map works in both light and dark theme | P1 |
+| MAP-08 | Restrict Places API to relevant countries (launch markets) | P2 |
+
+#### 21.6.3 API Key Setup
+
+```bash
+# Android: android/app/src/main/AndroidManifest.xml
+<meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_KEY"/>
+
+# iOS: ios/Runner/AppDelegate.swift or Info.plist
+# Enable Maps SDK for Android + iOS in Google Cloud Console
+```
+
+**Status:** ⬜ Not implemented — manual lat/lng fields used as temporary fallback
+
+#### 21.6.4 Map Screens (planned)
+
+| Screen | Description |
+|--------|-------------|
+| `DestinationPickerPage` | Full-screen map + search bar |
+| `TripMapPreview` | Small map thumbnail on trip card |
+| `MatchMapView` | Both destinations shown for match comparison |
+
+---
+
+### 21.7 Complete Flutter Stack (target)
+
+| Category | Package | Status |
+|----------|---------|--------|
+| State | `flutter_bloc`, `equatable` | ✅ |
+| DI | `get_it` | ✅ |
+| HTTP | `dio` | ✅ |
+| Auth | `firebase_auth`, `google_sign_in` | ✅ |
+| Local storage | `hive`, `shared_preferences` | ⬜ |
+| Maps | `google_maps_flutter`, `geolocator` | ⬜ |
+| Images | `cached_network_image` | ⬜ |
+| Routing | `go_router` | ⬜ (using Navigator now) |
+| Push | `firebase_messaging` | ⬜ |
+| Deep links | `app_links` | ⬜ |
+| Date/time | `intl` | ✅ |
+| Connectivity | `connectivity_plus` | ⬜ |
+| Testing | `bloc_test`, `mocktail` | ✅ |
+
+---
+
+### 21.8 PRD vs Implementation — Master Checklist
+
+| Requirement | In PRD | Implemented | Phase |
+|-------------|--------|-------------|-------|
+| BLoC state management | ✅ §21.1 | ✅ Partial | 0 |
+| Clean Architecture | ✅ §21.2 | ✅ Partial | 0 |
+| Reusable widgets | ✅ §21.3.4 | ⬜ | 1 |
+| Centralized strings | ✅ §21.3.2 | ⬜ Partial | 1 |
+| Date/time formatters | ✅ §21.3.3 | ⬜ | 1 |
+| Shared services layer | ✅ §21.3.1 | ⬜ | 1 |
+| Light theme | ✅ §21.4 | ✅ | 0 |
+| Dark theme | ✅ §21.4 | ⬜ | 1 |
+| Theme toggle + persist | ✅ §21.4 | ⬜ | 1 |
+| Performance targets | ✅ §21.5 | ⬜ | 1–2 |
+| Google Maps integration | ✅ §21.6 | ⬜ | 1 |
+| Places / geocoding | ✅ §21.6 | ⬜ | 1 |
+| Firebase Auth + Google | ✅ §5.1 | ✅ | 1 |
+| Hive offline cache | ✅ §6.3 | ⬜ | 2 |
+| FCM push | ✅ §5.4 | ⬜ | 2 |
+| Deep linking | ✅ §5.4 | ⬜ | 2 |
+| go_router navigation | ✅ §21.7 | ⬜ | 2 |
+| Unit + BLoC tests | ✅ §21.1 | ✅ Partial | 0 |
+| GitHub CI (analyze + test) | ✅ | ✅ | 0 |
+
+---
+
+### 21.9 Phase 1 Build Order (recommended)
+
+1. **Core foundation** — `AppColors`, `DateFormatter`, reusable widgets (`AppButton`, `AppTextField`)
+2. **Theme system** — dark theme + `ThemeCubit` + Settings toggle
+3. **Maps** — Google Maps API keys + `DestinationPickerPage`
+4. **Replace manual lat/lng** in Create Trip with map picker
+5. **Match UI** — discovery list, detail, request flow
+6. **Profile onboarding** — post-login profile completion
+7. **Performance pass** — const widgets, image caching, profile mode audit

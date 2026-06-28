@@ -89,4 +89,4 @@ function findMatches(sourceTrip, allTrips) {
     .sort((a, b) => b.score - a.score);
 }
 
-module.exports = { findMatches, MATCH_THRESHOLD };
+module.exports = { findMatches, scoreTripPair, MATCH_THRESHOLD };

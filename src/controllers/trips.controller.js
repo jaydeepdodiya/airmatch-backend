@@ -25,22 +25,26 @@ function validateTripBody(body) {
   }
 }
 
-function listTrips(req, res) {
-  res.json({ trips: tripStore.listTrips() });
+async function listTrips(req, res) {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  const result = await tripStore.listTripsForUser(req.user.uid, { page, limit });
+  res.json(result);
 }
 
-function getTrip(req, res) {
-  const trip = tripStore.getTripById(req.params.id);
+async function getTrip(req, res) {
+  const trip = await tripStore.getTripById(req.params.id);
   if (!trip) {
     return res.status(404).json({ error: 'Trip not found' });
   }
   return res.json({ trip });
 }
 
-function createTrip(req, res, next) {
+async function createTrip(req, res, next) {
   try {
     validateTripBody(req.body);
-    const trip = tripStore.createTrip({
+    const trip = await tripStore.createTrip({
       ...req.body,
       userId: req.user.uid,
     });
@@ -50,13 +54,14 @@ function createTrip(req, res, next) {
   }
 }
 
-function getTripMatches(req, res) {
-  const trip = tripStore.getTripById(req.params.id);
+async function getTripMatches(req, res) {
+  const trip = await tripStore.getTripById(req.params.id);
   if (!trip) {
     return res.status(404).json({ error: 'Trip not found' });
   }
 
-  const matches = findMatches(trip, tripStore.listTrips());
+  const candidates = await tripStore.listTrips();
+  const matches = findMatches(trip, candidates);
   return res.json({ tripId: trip.id, matches });
 }
 

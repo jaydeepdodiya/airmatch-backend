@@ -5,14 +5,24 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js"
   },
-  "keywords": ["airmatch", "api", "nodejs"],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "airmatch",
+    "api",
+    "nodejs"
+  ],
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "firebase-admin": "^13.4.0"
+    "express-rate-limit": "^8.5.2",
+    "firebase-admin": "^13.4.0",
+    "mongoose": "^9.7.1"
   }
 }

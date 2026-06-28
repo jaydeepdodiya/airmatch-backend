@@ -6,6 +6,7 @@ function getHealth(req, res) {
   res.json({
     status: 'ok',
     service: 'airmatch-api',
+    environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
   });
 }
